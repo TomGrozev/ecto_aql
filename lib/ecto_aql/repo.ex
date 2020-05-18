@@ -33,7 +33,7 @@ defmodule EctoAQL.Repo do
       end
 
       def get(struct, id, _opts \\ []) do
-        case Arangox.get(__MODULE__, "/_api/document/#{collection(struct)}/#{id}") do
+        case Arangox.get(__MODULE__, "/_api/document/#{collection(struct)}/#{key_from_id(id)}") do
           {:ok, _, %{body: body}} ->
             {:ok, struct |> validate_struct(body) |> document_changes()}
           {:error, %{status: status}} -> {:error, status}
@@ -177,6 +177,11 @@ defmodule EctoAQL.Repo do
         mod = module(queryable)
         mod.changeset(struct(mod.__struct__), params)
       end
+
+      defp key_from_id(str) when String.match?(str, ~r/[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/) do
+        List.first(String.split(str, "/", [parts: 2]))
+      end
+      defp key_from_id(str), do: str
 
       defp module(%mod{} = struct), do: mod
       defp module(struct), do: struct
