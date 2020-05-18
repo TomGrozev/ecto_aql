@@ -2,7 +2,9 @@ defmodule EctoAQL.Repo do
   @doc false
 
   defmacro __using__(opts) do
-    quote bind_quoted: [opts: opts] do
+    quote bind_quoted: [
+            opts: opts
+          ] do
       @otp_app opts[:otp_app]
 
       def child_spec(opts \\ []) do
@@ -19,17 +21,21 @@ defmodule EctoAQL.Repo do
 
       def all(struct, _opts \\ []) do
         {:ok, result} =
-          query("""
-          FOR doc IN #{collection(struct)}
-            RETURN doc
-          """)
+          query(
+            """
+            FOR doc IN #{collection(struct)}
+              RETURN doc
+            """
+          )
 
-        result
+        # Validates against the changeset
+        result |> Enum.map(&(struct |> validate_struct(&1) |> document_changes()))
       end
 
       def get(struct, id, _opts \\ []) do
         case Arangox.get(__MODULE__, "/_api/document/#{collection(struct)}/#{id}") do
-          {:ok, _, %{body: body}} -> {:ok, body}
+          {:ok, _, %{body: body}} ->
+            {:ok, struct |> validate_struct(body) |> document_changes()}
           {:error, %{status: status}} -> {:error, status}
         end
       end
@@ -42,7 +48,7 @@ defmodule EctoAQL.Repo do
                "/_api/document/#{collection(struct)}?returnNew=true",
                document
              ) do
-          {:ok, _, %{body: body}} -> {:ok, body["new"]}
+          {:ok, _, %{body: body}} -> {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
           {:error, %{status: status}} -> {:error, status}
         end
       end
@@ -57,7 +63,7 @@ defmodule EctoAQL.Repo do
             document
           )
 
-        body["new"]
+        struct |> validate_struct(body["new"]) |> document_changes()
       end
 
       def update(struct, id, _opts \\ []) do
@@ -68,7 +74,7 @@ defmodule EctoAQL.Repo do
                "/_api/document/#{collection(struct)}/#{id}?returnNew=true",
                document
              ) do
-          {:ok, _, %{body: body}} -> {:ok, body["new"]}
+          {:ok, _, %{body: body}} -> {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
           {:error, %{status: status}} -> {:error, status}
         end
       end
@@ -83,7 +89,7 @@ defmodule EctoAQL.Repo do
             document
           )
 
-        body["new"]
+        struct |> validate_struct(body["new"]) |> document_changes()
       end
 
       def delete(struct, id, _opts \\ []) do
@@ -94,13 +100,17 @@ defmodule EctoAQL.Repo do
       end
 
       def query(query_string) do
-        Arangox.transaction(__MODULE__, fn cursor ->
-          stream = Arangox.cursor(cursor, query_string)
+        Arangox.transaction(
+          __MODULE__,
+          fn cursor ->
+            stream = Arangox.cursor(cursor, query_string)
 
-          Enum.reduce(stream, [], fn resp, acc ->
-            acc ++ resp.body["result"]
-          end)
-        end)
+            Enum.reduce(stream, [], fn resp, acc ->
+              acc ++ resp.body["result"]
+              IO.inspect resp.body["result"]
+            end)
+          end
+        )
       end
 
       def list_collections do
@@ -111,10 +121,14 @@ defmodule EctoAQL.Repo do
       end
 
       def create_collection(name, type) do
-        case Arangox.post(__MODULE__, "/_api/collection", %{
-               name: name,
-               type: collection_type(type)
-             }) do
+        case Arangox.post(
+               __MODULE__,
+               "/_api/collection",
+               %{
+                 name: name,
+                 type: collection_type(type)
+               }
+             ) do
           {:ok, _, _} -> :ok
           {:error, %{status: status}} -> {:error, status}
         end
@@ -160,6 +174,14 @@ defmodule EctoAQL.Repo do
         |> Map.get(:changes)
       end
 
+      defp validate_struct(queryable, %{} = params) do
+        mod = module(queryable)
+        mod.changeset(struct(mod.__struct__), params)
+      end
+
+      defp module(%mod{} = struct), do: mod
+      defp module(struct), do: struct
+
       defp collection(%Ecto.Changeset{} = struct), do: struct.data.__meta__.source
       defp collection(struct), do: struct.__struct__.__meta__.source
 
@@ -167,10 +189,12 @@ defmodule EctoAQL.Repo do
       defp collection_type(:edge), do: 3
 
       defp system_db do
-        options = config([
-          pool_size: 1,
-          database: "_system"
-        ])
+        options = config(
+          [
+            pool_size: 1,
+            database: "_system"
+          ]
+        )
 
         Arangox.start_link(options)
       end
