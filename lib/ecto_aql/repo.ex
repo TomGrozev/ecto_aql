@@ -107,7 +107,6 @@ defmodule EctoAQL.Repo do
 
             Enum.reduce(stream, [], fn resp, acc ->
               acc ++ resp.body["result"]
-              IO.inspect resp.body["result"]
             end)
           end
         )
