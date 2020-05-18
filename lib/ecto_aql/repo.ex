@@ -30,23 +30,17 @@ defmodule EctoAQL.Repo do
 
         # Validates against the changeset
         result
-        |> Enum.map(
-             &(
+        |> Enum.map(fn s ->
                struct
-               |> validate_struct(&1)
-               |> document_changes())
-           )
+               |> validate_struct(s)
+               |> document_changes()
+             end)
       end
 
       def get(struct, id, _opts \\ []) do
         case Arangox.get(__MODULE__, "/_api/document/#{collection(struct)}/#{key_from_id(id)}") do
           {:ok, _, %{body: body}} ->
-            {
-              :ok,
-              struct
-              |> validate_struct(body)
-              |> document_changes()
-            }
+            {:ok, struct |> validate_struct(body) |> document_changes()}
           {:error, %{status: status}} -> {:error, status}
         end
       end
@@ -60,12 +54,7 @@ defmodule EctoAQL.Repo do
                document
              ) do
           {:ok, _, %{body: body}} ->
-            {
-              :ok,
-              struct
-              |> validate_struct(body["new"])
-              |> document_changes()
-            }
+            {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
           {:error, %{status: status}} ->
             {:error, status}
         end
@@ -95,12 +84,7 @@ defmodule EctoAQL.Repo do
                document
              ) do
           {:ok, _, %{body: body}} ->
-            {
-              :ok,
-              struct
-              |> validate_struct(body["new"])
-              |> document_changes()
-            }
+            {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
           {:error, %{status: status}} ->
             {:error, status}
         end
@@ -212,8 +196,10 @@ defmodule EctoAQL.Repo do
       end
 
       defp key_from_id(str) do
+        IO.puts String.match?(str, ~r/[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/)
         if String.match?(str, ~r/[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/) do
-          List.first(String.split(str, "/", [parts: 2]))
+          [_, key | _] = String.split(str, "/", [parts: 2])
+          key
         else
           str
         end
