@@ -29,13 +29,24 @@ defmodule EctoAQL.Repo do
           )
 
         # Validates against the changeset
-        result |> Enum.map(&(struct |> validate_struct(&1) |> document_changes()))
+        result
+        |> Enum.map(
+             &(
+               struct
+               |> validate_struct(&1)
+               |> document_changes())
+           )
       end
 
       def get(struct, id, _opts \\ []) do
         case Arangox.get(__MODULE__, "/_api/document/#{collection(struct)}/#{key_from_id(id)}") do
           {:ok, _, %{body: body}} ->
-            {:ok, struct |> validate_struct(body) |> document_changes()}
+            {
+              :ok,
+              struct
+              |> validate_struct(body)
+              |> document_changes()
+            }
           {:error, %{status: status}} -> {:error, status}
         end
       end
@@ -48,8 +59,15 @@ defmodule EctoAQL.Repo do
                "/_api/document/#{collection(struct)}?returnNew=true",
                document
              ) do
-          {:ok, _, %{body: body}} -> {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
-          {:error, %{status: status}} -> {:error, status}
+          {:ok, _, %{body: body}} ->
+            {
+              :ok,
+              struct
+              |> validate_struct(body["new"])
+              |> document_changes()
+            }
+          {:error, %{status: status}} ->
+            {:error, status}
         end
       end
 
@@ -63,7 +81,9 @@ defmodule EctoAQL.Repo do
             document
           )
 
-        struct |> validate_struct(body["new"]) |> document_changes()
+        struct
+        |> validate_struct(body["new"])
+        |> document_changes()
       end
 
       def update(struct, id, _opts \\ []) do
@@ -74,8 +94,15 @@ defmodule EctoAQL.Repo do
                "/_api/document/#{collection(struct)}/#{id}?returnNew=true",
                document
              ) do
-          {:ok, _, %{body: body}} -> {:ok, struct |> validate_struct(body["new"]) |> document_changes()}
-          {:error, %{status: status}} -> {:error, status}
+          {:ok, _, %{body: body}} ->
+            {
+              :ok,
+              struct
+              |> validate_struct(body["new"])
+              |> document_changes()
+            }
+          {:error, %{status: status}} ->
+            {:error, status}
         end
       end
 
@@ -89,7 +116,9 @@ defmodule EctoAQL.Repo do
             document
           )
 
-        struct |> validate_struct(body["new"]) |> document_changes()
+        struct
+        |> validate_struct(body["new"])
+        |> document_changes()
       end
 
       def delete(struct, id, _opts \\ []) do
@@ -105,9 +134,13 @@ defmodule EctoAQL.Repo do
           fn cursor ->
             stream = Arangox.cursor(cursor, query_string)
 
-            Enum.reduce(stream, [], fn resp, acc ->
-              acc ++ resp.body["result"]
-            end)
+            Enum.reduce(
+              stream,
+              [],
+              fn resp, acc ->
+                acc ++ resp.body["result"]
+              end
+            )
           end
         )
       end
@@ -178,10 +211,13 @@ defmodule EctoAQL.Repo do
         mod.changeset(struct(mod.__struct__), params)
       end
 
-      defp key_from_id(str) when String.match?(str, ~r/[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/) do
-        List.first(String.split(str, "/", [parts: 2]))
+      defp key_from_id(str) do
+        if String.match?(str, ~r/[a-zA-Z0-9_]+\/[a-zA-Z0-9_]+/) do
+          List.first(String.split(str, "/", [parts: 2]))
+        else
+          str
+        end
       end
-      defp key_from_id(str), do: str
 
       defp module(%mod{} = struct), do: mod
       defp module(struct), do: struct
